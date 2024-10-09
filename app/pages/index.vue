@@ -2,8 +2,8 @@
 import {io, Socket} from "socket.io-client";
 
 function generateRandomNickname(length = 8): string {
-    const adjectives = ['Funny', 'Fastly', 'Slowly', 'Smartly', 'Strongly'];
-    const nouns      = ['Cat', 'Dog', 'Dragon', 'Soldier', 'Hero'];
+    const adjectives = ['Funny', 'Fastly', 'Slowly', 'Smartly', 'Strongly', 'Bravely', 'Easily', 'Loudly', 'Quietly', 'Happily', 'Carefully', 'Cleverly', 'Boldly', 'Warmly', 'Slyly'];
+    const nouns      = ['Cat', 'Dog', 'Dragon', 'Soldier', 'Hero', 'Wizard', 'Knight', 'Vampire', 'Fairy', 'Monster', 'Pirate', 'Robot', 'Ninja', 'Ghost', 'Alien'];
 
     // Выбор случайного прилагательного и существительного
     const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
@@ -27,29 +27,33 @@ const socketAvailable  = ref<boolean>(false);
 const peerAvailable    = ref<boolean>(false);
 const messageAvailable = ref<boolean>(false);
 
-const users         = ref<string[]>([]);
-const selectedUser  = ref<string>();
-const myUser        = ref<string>();
-const message       = ref<string>('');
-const messages      = ref<any[]>([]);
+const users        = ref<string[]>([]);
+const selectedUser = ref<string>();
+const myUser       = ref<string>();
+const message      = ref<string>('');
+const messages     = ref<any[]>([]);
 
 const inputRef  = ref();
 const scrollRef = ref();
-const videoRef  = ref();
-const audioRef  = ref();
+
+const mineVideoRef = ref();
+const mineAudioRef = ref();
+
+const friendVideoRef = ref();
+const friendAudioRef = ref();
 
 const selectedVideo = ref();
 const selectedAudio = ref();
 
-const selectedVideoDeviceId = computed(() => selectedVideo.value?.deviceId);
-const selectedAudioDeviceId = computed(() => selectedAudio.value?.deviceId);
+const selectedVideoDeviceId = computed(() => selectedVideo.value ? {deviceId: selectedVideo.value?.deviceId} : false);
+const selectedAudioDeviceId = computed(() => selectedAudio.value ? {deviceId: selectedAudio.value?.deviceId} : false);
 
 const {videoInputs: cameras, audioInputs: microphones} = useDevicesList({requestPermissions: true});
 
 const {stream, start} = useUserMedia({
     constraints: {
-        video: {deviceId: selectedVideoDeviceId},
-        audio: {deviceId: selectedAudioDeviceId}
+        video: selectedVideoDeviceId,
+        audio: selectedAudioDeviceId
     }
 });
 
@@ -63,7 +67,7 @@ async function connectToUser(user: string) {
 
     dataChannel = makeDataChannel();
 
-    if (selectedAudio.value) {
+    if (selectedVideo.value || selectedAudio.value) {
         await start();
 
         if (stream.value) {
@@ -72,6 +76,14 @@ async function connectToUser(user: string) {
                     return;
 
                 peerConnection.addTrack(track, stream.value);
+
+                if (track.kind == 'video') {
+                    const mediaStream = new MediaStream();
+                    mediaStream.addTrack(track);
+
+                    mineVideoRef.value.srcObject = mediaStream;
+                    mineVideoRef.value.play();
+                }
             });
         }
     }
@@ -100,16 +112,17 @@ function makePeerConnection(): RTCPeerConnection {
             const mediaStream = new MediaStream();
             mediaStream.addTrack(event.track);
 
-            audioRef.value.srcObject = mediaStream;
-            audioRef.value.play();
+            friendAudioRef.value.srcObject = mediaStream;
+            friendAudioRef.value.volume    = 1;
+            friendAudioRef.value.play();
         }
 
         if (event.track.kind == 'video') {
             const mediaStream = new MediaStream();
             mediaStream.addTrack(event.track);
 
-            videoRef.value.srcObject = mediaStream;
-            videoRef.value.play();
+            friendVideoRef.value.srcObject = mediaStream;
+            friendVideoRef.value.play();
         }
     };
 
@@ -207,7 +220,7 @@ onMounted(() => {
         socket.disconnect();
     }
 
-    socket = io('http://5.3.104.35:3000', {
+    socket = io('https://webrtc.vrkitty.ru:3000', {
         transports: ['websocket']
     });
 
@@ -254,6 +267,27 @@ onMounted(() => {
 
         await peerConnection.setRemoteDescription(offer);
 
+        if (selectedVideo.value || selectedAudio.value) {
+            await start();
+
+            if (stream.value) {
+                stream.value.getTracks().forEach(track => {
+                    if (!stream.value)
+                        return;
+
+                    peerConnection.addTrack(track, stream.value);
+
+                    if (track.kind == 'video') {
+                        const mediaStream = new MediaStream();
+                        mediaStream.addTrack(track);
+
+                        mineVideoRef.value.srcObject = mediaStream;
+                        mineVideoRef.value.play();
+                    }
+                });
+            }
+        }
+
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
@@ -267,8 +301,6 @@ onMounted(() => {
     });
 
     socket.on('candidate', (candidate: RTCIceCandidate) => {
-        console.log('Candidate', candidate);
-
         peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
                       .catch(error => {
                           console.error('Error adding received ICE candidate', error);
@@ -351,39 +383,39 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="mt-5 flex gap-5">
-            <UCard class="flex flex-col grow">
+            <UCard class="flex flex-col grow w-1/2">
                 <template #header>
-                    <h5 class="font-semibold">Audio</h5>
+                    <h5 class="font-semibold">Me</h5>
                 </template>
 
                 <div class="flex flex-col gap-2.5">
-                    <UFormGroup label="Input">
-                        <USelectMenu placeholder="Select audio device"
-                                     :options="microphones"
-                                     v-model="selectedAudio"/>
-                    </UFormGroup>
+                    <video ref="mineVideoRef" controls autoplay playsinline class="w-full h-full aspect-[4/3]"/>
+                    <audio ref="mineAudioRef" autoplay controls/>
 
-                    <UFormGroup label="Output">
-                        <audio ref="audioRef" controls autoplay/>
-                    </UFormGroup>
+                    <div class="flex gap-2.5">
+                        <UFormGroup label="Video" class="w-1/2">
+                            <USelectMenu placeholder="Select video device"
+                                         :options="cameras"
+                                         v-model="selectedVideo"/>
+                        </UFormGroup>
+
+                        <UFormGroup label="Audio" class="w-1/2">
+                            <USelectMenu placeholder="Select audio device"
+                                         :options="microphones"
+                                         v-model="selectedAudio"/>
+                        </UFormGroup>
+                    </div>
                 </div>
             </UCard>
 
-            <UCard class="flex flex-col grow">
+            <UCard class="flex flex-col grow w-1/2">
                 <template #header>
-                    <h5 class="font-semibold">Video</h5>
+                    <h5 class="font-semibold">Friend</h5>
                 </template>
 
                 <div class="flex flex-col gap-2.5">
-                    <UFormGroup label="Input">
-                        <USelectMenu placeholder="Select video device"
-                                     :options="cameras"
-                                     v-model="selectedVideo"/>
-                    </UFormGroup>
-
-                    <UFormGroup label="Output">
-                        <video ref="videoRef" controls autoplay playsinline class="w-full"/>
-                    </UFormGroup>
+                    <video ref="friendVideoRef" controls autoplay playsinline class="w-full h-full aspect-[4/3]"/>
+                    <audio ref="friendAudioRef" autoplay controls/>
                 </div>
             </UCard>
         </div>
