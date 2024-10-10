@@ -208,6 +208,8 @@ watch(peerConnection, connection => {
     }, 1000);
 });
 
+const config = useRuntimeConfig();
+
 onMounted(() => {
     if (socket) {
         if (peerConnection.value)
@@ -219,7 +221,7 @@ onMounted(() => {
         socket.disconnect();
     }
 
-    socket = io('https://webrtc.vrkitty.ru:3000', {
+    socket = io(config.public.socketUrl, {
         transports: ['websocket']
     });
 

@@ -30,5 +30,11 @@ export default defineNuxtConfig({
             key : './privkey.pem',
             cert: './fullchain.pem'
         }
+    },
+
+    runtimeConfig: {
+        public: {
+            socketUrl: process.env.NUXT_SOCKET_URL
+        }
     }
 })
